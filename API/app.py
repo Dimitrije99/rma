@@ -189,13 +189,14 @@ def work_history():
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute(
-            "SELECT StartTime, EndTime, Description, DATE(StartTime) as Date FROM WorkTime WHERE UserId = ? ORDER BY StartTime DESC",
+            "SELECT Id, StartTime, EndTime, Description, DATE(StartTime) as Date FROM WorkTime WHERE UserId = ? ORDER BY StartTime DESC",
             (user_id,),
         )
         rows = cursor.fetchall()
 
         history = [
             {
+                "Id": row["Id"],
                "Date": row["Date"],
                 "StartTime": row["StartTime"],
                  "EndTime": row["EndTime"] if row["EndTime"] else "Ongoing",
@@ -234,6 +235,26 @@ def register():
     conn.commit()
     conn.close()
     return jsonify({"message": "Registration successful"}), 200
+
+@app.route('/delete_work_history', methods=['POST'])
+def delete_work_history():
+    data = request.get_json()
+    if not data or 'id' not in data:
+        return jsonify({'error': 'Missing "id" parameter'}), 400
+
+    entry_id = data['id']
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM WorkTime WHERE Id = ?", (entry_id,))
+            conn.commit()
+            if cursor.rowcount > 0:
+                return jsonify({'message': 'Work history entry deleted successfully.'}), 200
+            else:
+                return jsonify({'message': 'No work history entry found with the provided ID.'}), 404
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == "__main__":
