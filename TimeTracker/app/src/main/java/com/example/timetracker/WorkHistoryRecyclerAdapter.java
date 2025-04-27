@@ -12,9 +12,15 @@ import java.util.ArrayList;
 public class WorkHistoryRecyclerAdapter extends RecyclerView.Adapter<WorkHistoryRecyclerAdapter.WorkHistoryViewHolder> {
 
     private final ArrayList<WorkHistoryItem> historyList;
+    private final OnItemClickListener listener;
 
-    public WorkHistoryRecyclerAdapter(ArrayList<WorkHistoryItem> historyList) {
+    public interface OnItemClickListener {
+        void onItemClick(int position);
+    }
+
+    public WorkHistoryRecyclerAdapter(ArrayList<WorkHistoryItem> historyList, OnItemClickListener listener) {
         this.historyList = historyList;
+        this.listener = listener;
     }
 
     @NonNull
@@ -33,6 +39,12 @@ public class WorkHistoryRecyclerAdapter extends RecyclerView.Adapter<WorkHistory
         holder.txtStartTime.setText(currentItem.getStartTime());
         holder.txtEndTime.setText(currentItem.getEndTime());
         holder.txtDescription.setText(currentItem.getDescription());
+
+        holder.itemView.setOnClickListener(v -> {
+            if (listener != null) {
+                listener.onItemClick(position); // Use our custom onItemClick
+            }
+        });
     }
 
     @Override

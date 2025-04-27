@@ -1,7 +1,11 @@
 package com.example.timetracker;
 
 import android.os.Bundle;
+import android.text.InputType;
+import android.widget.EditText;
+import android.widget.LinearLayout;
 import android.widget.Toast;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.appcompat.widget.Toolbar;
 import androidx.recyclerview.widget.DividerItemDecoration;
@@ -19,7 +23,7 @@ import org.json.JSONObject;
 import java.io.IOException;
 import java.util.ArrayList;
 
-public class WorkHistoryActivity extends AppCompatActivity {
+public class WorkHistoryActivity extends AppCompatActivity implements WorkHistoryRecyclerAdapter.OnItemClickListener {
     private RecyclerView recyclerViewHistory;
     private WorkHistoryRecyclerAdapter adapter;
     private ArrayList<WorkHistoryItem> historyList = new ArrayList<>();
@@ -36,7 +40,7 @@ public class WorkHistoryActivity extends AppCompatActivity {
 
         recyclerViewHistory = findViewById(R.id.recyclerViewHistory);
         recyclerViewHistory.setLayoutManager(new LinearLayoutManager(this));
-        adapter = new WorkHistoryRecyclerAdapter(historyList);
+        adapter = new WorkHistoryRecyclerAdapter(historyList, this);
         recyclerViewHistory.setAdapter(adapter);
 
         DividerItemDecoration dividerItemDecoration = new DividerItemDecoration(recyclerViewHistory.getContext(),
@@ -130,6 +134,7 @@ public class WorkHistoryActivity extends AppCompatActivity {
                                 JSONObject jsonResponse = new JSONObject(responseBody);
                                 if (jsonResponse.has("message")) {
                                     Toast.makeText(WorkHistoryActivity.this, jsonResponse.getString("message"), Toast.LENGTH_SHORT).show();
+                                    // No need to update list here, fetchWorkHistory will refresh
                                 } else if (jsonResponse.has("error")) {
                                     Toast.makeText(WorkHistoryActivity.this, "Delete failed: " + jsonResponse.getString("error"), Toast.LENGTH_SHORT).show();
                                     // Undo local deletion
@@ -160,6 +165,73 @@ public class WorkHistoryActivity extends AppCompatActivity {
                 // Undo local deletion
                 historyList.add(adapterPosition, historyList.get(adapterPosition));
                 adapter.notifyItemInserted(adapterPosition);
+            }
+        }).start();
+    }
+
+    @Override
+    public void onItemClick(int position) {
+        final WorkHistoryItem itemToEdit = historyList.get(position);
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        builder.setTitle("Edit Description");
+
+        final EditText input = new EditText(this);
+        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        input.setText(itemToEdit.getDescription());
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        input.setLayoutParams(lp);
+        builder.setView(input);
+
+        builder.setPositiveButton("Save", (dialog, which) -> {
+            String newDescription = input.getText().toString().trim();
+            if (!newDescription.equals(itemToEdit.getDescription())) {
+                updateWorkHistoryDescription(itemToEdit.getId(), newDescription, position);
+            }
+        });
+        builder.setNegativeButton("Cancel", (dialog, which) -> dialog.cancel());
+
+        builder.show();
+    }
+
+    private void updateWorkHistoryDescription(int idToUpdate, String newDescription, int adapterPosition) {
+        new Thread(() -> {
+            try {
+                String url = "http://10.0.2.2:5000/edit_work_history";
+                RequestBody body = RequestBody.create(JSON,
+                        "{\"id\": " + idToUpdate + ", \"description\": \"" + newDescription + "\"}");
+                Request request = new Request.Builder()
+                        .url(url)
+                        .put(body) // Use PUT for updates
+                        .build();
+                try (Response response = client.newCall(request).execute()) {
+                    String responseBody = response.body().string();
+                    runOnUiThread(() -> {
+                        if (response.isSuccessful()) {
+                            try {
+                                JSONObject jsonResponse = new JSONObject(responseBody);
+                                if (jsonResponse.has("message")) {
+                                    Toast.makeText(WorkHistoryActivity.this, jsonResponse.getString("message"), Toast.LENGTH_SHORT).show();
+                                    // Update the local list and notify the adapter
+                                    historyList.get(adapterPosition).setDescription(newDescription);
+                                    adapter.notifyItemChanged(adapterPosition);
+                                } else if (jsonResponse.has("error")) {
+                                    Toast.makeText(WorkHistoryActivity.this, "Update failed: " + jsonResponse.getString("error"), Toast.LENGTH_SHORT).show();
+                                }
+                            } catch (Exception e) {
+                                Toast.makeText(WorkHistoryActivity.this, "Error parsing update response", Toast.LENGTH_SHORT).show();
+                            }
+                        } else {
+                            Toast.makeText(WorkHistoryActivity.this, "Failed to update entry", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                } catch (IOException e) {
+                    runOnUiThread(() -> Toast.makeText(WorkHistoryActivity.this, "Network error during update", Toast.LENGTH_SHORT).show());
+                }
+            } catch (Exception e) {
+                runOnUiThread(() -> Toast.makeText(WorkHistoryActivity.this, "Error creating update request", Toast.LENGTH_SHORT).show());
             }
         }).start();
     }

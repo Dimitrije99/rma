@@ -255,6 +255,27 @@ def delete_work_history():
                 return jsonify({'message': 'No work history entry found with the provided ID.'}), 404
     except sqlite3.Error as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/edit_work_history', methods=['PUT'])
+def edit_work_history():
+    data = request.get_json()
+    if not data or 'id' not in data or 'description' not in data:
+        return jsonify({'error': 'Missing "id" or "description" parameter'}), 400
+
+    entry_id = data['id']
+    new_description = data['description']
+
+    try:
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("UPDATE WorkTime SET Description = ? WHERE Id = ?", (new_description, entry_id,))
+            conn.commit()
+            if cursor.rowcount > 0:
+                return jsonify({'message': 'Work history entry updated successfully.'}), 200
+            else:
+                return jsonify({'message': 'No work history entry found with the provided ID.'}), 404
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 500
 
 
 if __name__ == "__main__":
